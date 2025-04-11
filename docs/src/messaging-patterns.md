@@ -28,7 +28,7 @@ When this check fails, it throws a `RequiredMessageNotSuccessful(bytes32)` error
 
 The auto-relayer built into [supersim](https://github.com/ethereum-optimism/supersim) has this functionality built in, so if you use the `requireMessageSuccess` function your dependent messages will be relayed properly.
 
-Here is an example of how to use this pattern (referenced from the [superchain-starter-multisend](https://github.com/ethereum-optimism/superchain-starter-multisend/blob/main/contracts/src/CrossChainMultisend.sol) example):
+Here is an example of how to use this pattern (referenced from the [superchain-starter-xchain-eth-multitransfer](https://github.com/ethereum-optimism/superchain-starter-xchain-eth-multitransfer/blob/main/contracts/src/CrossChainETHMultitransfer.sol) example):
 
 ```solidity
  function send(uint256 _destinationChainId, Send[] calldata _sends) public payable returns (bytes32) {
