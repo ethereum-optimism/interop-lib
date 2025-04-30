@@ -53,4 +53,4 @@ import {PredeployAddresses} from "@interop-lib/libraries/PredeployAddresses.sol"
 ### Contracts
 
 - [SuperchainERC20.sol](src/SuperchainERC20.sol)
-- [Promise.sol](https://github.com/ethereum-optimism/interop-lib/blob/main/src/Promise.sol)
+- [Promise.sol](src/Promise.sol)
