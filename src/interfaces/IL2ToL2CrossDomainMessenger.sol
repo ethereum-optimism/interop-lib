@@ -66,10 +66,9 @@ interface IL2ToL2CrossDomainMessenger {
     /// @return Nonce of the next message to be sent, with added message version.
     function messageNonce() external view returns (uint256);
 
-    /// @notice Mapping of message hashes to boolean sent values. Note that a message will only be present in this
+    /// @notice Mapping of message nonces to message hashes. Note that a message will only be present in this
     ///         mapping if it has been sent from this chain to a destination chain.
-    /// @return Returns true if the message corresponding to the `_msgHash` was successfully sent.
-    function sentMessages(bytes32) external view returns (bool);
+    function sentMessages(uint256) external view returns (bytes32);
 
     /// @notice Retrieves the sender of the current cross domain message.
     /// @return sender_ Address of the sender of the current cross domain message.
@@ -93,7 +92,11 @@ interface IL2ToL2CrossDomainMessenger {
     /// @param _message     Message to trigger the target address with.
     /// @return messageHash_ The hash of the message being sent, used to track whether the message
     ///                      has successfully been relayed.
-    function sendMessage(uint256 _destination, address _target, bytes calldata _message)
+    function sendMessage(
+        uint256 _destination,
+        address _target,
+        bytes calldata _message
+    )
         external
         returns (bytes32 messageHash_);
 
@@ -113,7 +116,9 @@ interface IL2ToL2CrossDomainMessenger {
         address _sender,
         address _target,
         bytes calldata _message
-    ) external returns (bytes32 messageHash_);
+    )
+        external
+        returns (bytes32 messageHash_);
 
     /// @notice Relays a message that was sent by the other CrossDomainMessenger contract. Can only
     ///         be executed via cross-chain call from the other messenger OR if the message was
@@ -121,7 +126,10 @@ interface IL2ToL2CrossDomainMessenger {
     /// @param _id          Identifier of the SentMessage event to be relayed
     /// @param _sentMessage Message payload of the `SentMessage` event
     /// @return returnData_ Return data from the target contract call.
-    function relayMessage(Identifier calldata _id, bytes calldata _sentMessage)
+    function relayMessage(
+        Identifier calldata _id,
+        bytes calldata _sentMessage
+    )
         external
         payable
         returns (bytes memory returnData_);
