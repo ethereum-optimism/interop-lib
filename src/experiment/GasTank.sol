@@ -150,6 +150,8 @@ contract GasTank is IGasTank {
 
         uint256 claimCost = _min(balanceOf[_gasProvider], claimOverhead(destinationMessageHashesLength));
 
+        balanceOf[_gasProvider] -= claimCost;
+
         claimed[originMessageHash] = true;
 
         new SafeSend{ value: relayCost }(payable(relayer));
