@@ -13,7 +13,13 @@ interface IGasTank {
 
     // Events
     event AuthorizedClaim(address indexed gasProvider, bytes32 indexed messageHash);
-    event Claimed(bytes32 indexed originMsgHash, address indexed relayer, address indexed gasProvider, uint256 amount);
+    event Claimed(
+        bytes32 indexed originMsgHash,
+        address indexed relayer,
+        address indexed gasProvider,
+        uint256 relayCost,
+        uint256 claimCost
+    );
     event Deposit(address indexed depositor, uint256 amount);
     event RelayedMessageGasReceipt(
         bytes32 indexed messageHash, address indexed relayer, uint256 gasCost, bytes32[] nestedMessageHashes

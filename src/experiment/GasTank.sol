@@ -66,7 +66,8 @@ contract GasTank is IGasTank {
 
         if (block.timestamp < withdrawal.timestamp + WITHDRAWAL_DELAY) revert WithdrawPending();
 
-        uint256 amount = balanceOf[msg.sender] < withdrawal.amount ? balanceOf[msg.sender] : withdrawal.amount;
+        uint256 amount = _min(balanceOf[msg.sender], withdrawal.amount);
+
         balanceOf[msg.sender] -= amount;
 
         delete withdrawals[msg.sender];
@@ -112,7 +113,7 @@ contract GasTank is IGasTank {
         }
 
         // Get the gas used
-        gasCost_ = _cost(initialGas - gasleft()) + _gasReceiptEventOverhead(nestedMessageHashes_.length);
+        gasCost_ = _cost(initialGas - gasleft()) + _relayOverhead(nestedMessageHashes_.length);
 
         // Emit the event with the relationship between the origin message and the destination messages
         emit RelayedMessageGasReceipt(messageHash, msg.sender, gasCost_, nestedMessageHashes_);
@@ -143,18 +144,19 @@ contract GasTank is IGasTank {
             authorizedMessages[_gasProvider][destinationMessageHashes[i]] = true;
         }
 
-        // Compute total cost (adding the overhead of this claim)
-        uint256 cost = relayCost + claimOverhead(destinationMessageHashesLength);
+        if (balanceOf[_gasProvider] < relayCost) revert InsufficientBalance();
 
-        if (balanceOf[_gasProvider] < cost) revert InsufficientBalance();
+        balanceOf[_gasProvider] -= relayCost;
 
-        balanceOf[_gasProvider] -= cost;
+        uint256 claimCost = _min(balanceOf[_gasProvider], claimOverhead(destinationMessageHashesLength));
 
         claimed[originMessageHash] = true;
 
-        new SafeSend{ value: cost }(payable(relayer));
+        new SafeSend{ value: relayCost }(payable(relayer));
 
-        emit Claimed(originMessageHash, relayer, _gasProvider, cost);
+        new SafeSend{ value: claimCost }(payable(msg.sender));
+
+        emit Claimed(originMessageHash, relayer, _gasProvider, relayCost, claimCost);
     }
 
     /// @notice Decodes the payload of the RelayedMessageGasReceipt event
@@ -176,24 +178,27 @@ contract GasTank is IGasTank {
         if (bytes32(_payload[:32]) != RelayedMessageGasReceipt.selector) revert InvalidPayload();
 
         // Decode Topics
-        (originMessageHash_, relayer_, relayCost_) = abi.decode(_payload[32:128], (bytes32, address, uint256));
+        (originMessageHash_, relayer_) = abi.decode(_payload[32:96], (bytes32, address));
 
         // Decode Data
-        destinationMessageHashes_ = abi.decode(_payload[128:], (bytes32[]));
+        (relayCost_, destinationMessageHashes_) = abi.decode(_payload[96:], (uint256, bytes32[]));
     }
 
     /// @notice Calculates the overhead of a claim
     /// @param _numHashes The number of destination hashes relayed
     /// @return overhead_ The overhead cost of the claim transaction in wei
     function claimOverhead(uint256 _numHashes) public view returns (uint256 overhead_) {
-        overhead_ = _cost(125_000 + _numHashes * 23_000);
+        overhead_ = _cost(152_000 + _numHashes * 23_000);
     }
 
     /// @notice Calculates the overhead to emit RelayedMessageGasReceipt
     /// @param _numHashes The number of destination hashes relayed
     /// @return overhead_ The gas cost to emit the event in wei
-    function _gasReceiptEventOverhead(uint256 _numHashes) internal view returns (uint256 overhead_) {
-        overhead_ = _cost(3_000 + _numHashes * 300);
+    function _relayOverhead(uint256 _numHashes) internal view returns (uint256 overhead_) {
+        // The memory expansion cost is quadratic.
+        // See: https://www.evm.codes/about#memoryexpansion
+        uint256 memoryExpansionGas = (420 * _numHashes) + (_numHashes * _numHashes) / 512;
+        overhead_ = _cost(35_000 + memoryExpansionGas);
     }
 
     /// @notice Calculates the cost of gas used in wei
@@ -201,6 +206,14 @@ contract GasTank is IGasTank {
     /// @return cost_ The cost in wei
     function _cost(uint256 _gasUsed) internal view returns (uint256 cost_) {
         cost_ = block.basefee * _gasUsed;
+    }
+
+    /// @notice Calculates the minimum of two values
+    /// @param _a The first value
+    /// @param _b The second value
+    /// @return min_ The minimum of the two values
+    function _min(uint256 _a, uint256 _b) internal pure returns (uint256 min_) {
+        min_ = _a < _b ? _a : _b;
     }
 
     /// @notice Calculates the hash of a message
