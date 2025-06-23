@@ -17,6 +17,7 @@ interface IGasTank {
         bytes32 indexed originMsgHash,
         address indexed relayer,
         address indexed gasProvider,
+        address claimer,
         uint256 relayCost,
         uint256 claimCost
     );
