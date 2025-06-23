@@ -158,7 +158,7 @@ contract GasTank is IGasTank {
 
         new SafeSend{ value: claimCost }(payable(msg.sender));
 
-        emit Claimed(originMessageHash, relayer, _gasProvider, relayCost, claimCost);
+        emit Claimed(originMessageHash, relayer, _gasProvider, msg.sender, relayCost, claimCost);
     }
 
     /// @notice Decodes the payload of the RelayedMessageGasReceipt event
