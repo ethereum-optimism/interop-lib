@@ -113,7 +113,7 @@ contract GasTank is IGasTank {
         }
 
         // Get the gas used
-        gasCost_ = _cost(initialGas - gasleft()) + _relayOverhead(nestedMessageHashes_.length);
+        gasCost_ = _cost(initialGas - gasleft(), block.basefee) + _relayOverhead(nestedMessageHashes_.length);
 
         // Emit the event with the relationship between the origin message and the destination messages
         emit RelayedMessageGasReceipt(messageHash, msg.sender, gasCost_, nestedMessageHashes_);
@@ -148,7 +148,7 @@ contract GasTank is IGasTank {
 
         balanceOf[_gasProvider] -= relayCost;
 
-        uint256 claimCost = _min(balanceOf[_gasProvider], claimOverhead(destinationMessageHashesLength));
+        uint256 claimCost = _min(balanceOf[_gasProvider], claimOverhead(destinationMessageHashesLength, block.basefee));
 
         balanceOf[_gasProvider] -= claimCost;
 
@@ -188,9 +188,10 @@ contract GasTank is IGasTank {
 
     /// @notice Calculates the overhead of a claim
     /// @param _numHashes The number of destination hashes relayed
+    /// @param _baseFee The base fee of the block
     /// @return overhead_ The overhead cost of the claim transaction in wei
-    function claimOverhead(uint256 _numHashes) public view returns (uint256 overhead_) {
-        overhead_ = _cost(152_000 + _numHashes * 23_000);
+    function claimOverhead(uint256 _numHashes, uint256 _baseFee) public pure returns (uint256 overhead_) {
+        overhead_ = _cost(152_000 + _numHashes * 23_000, _baseFee);
     }
 
     /// @notice Calculates the overhead to emit RelayedMessageGasReceipt
@@ -200,14 +201,15 @@ contract GasTank is IGasTank {
         // The memory expansion cost is quadratic.
         // See: https://www.evm.codes/about#memoryexpansion
         uint256 memoryExpansionGas = (420 * _numHashes) + (_numHashes * _numHashes) / 512;
-        overhead_ = _cost(35_000 + memoryExpansionGas);
+        overhead_ = _cost(35_000 + memoryExpansionGas, block.basefee);
     }
 
     /// @notice Calculates the cost of gas used in wei
     /// @param _gasUsed The amount of gas to calculate the cost for
+    /// @param _baseFee The base fee of the block
     /// @return cost_ The cost in wei
-    function _cost(uint256 _gasUsed) internal view returns (uint256 cost_) {
-        cost_ = block.basefee * _gasUsed;
+    function _cost(uint256 _gasUsed, uint256 _baseFee) internal pure returns (uint256 cost_) {
+        cost_ = _baseFee * _gasUsed;
     }
 
     /// @notice Calculates the minimum of two values
