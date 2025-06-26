@@ -12,18 +12,18 @@ interface IGasTank {
     }
 
     // Events
-    event AuthorizedClaim(address indexed gasProvider, bytes32 indexed messageHash);
+    event AuthorizedClaims(address indexed gasProvider, bytes32[] messageHashes);
     event Claimed(
-        bytes32 indexed originMsgHash,
+        bytes32 indexed messageHash,
         address indexed relayer,
         address indexed gasProvider,
         address claimer,
         uint256 relayCost,
         uint256 claimCost
     );
-    event Deposit(address indexed depositor, uint256 amount);
+    event Deposit(address indexed gasProvider, uint256 amount);
     event RelayedMessageGasReceipt(
-        bytes32 indexed messageHash, address indexed relayer, uint256 gasCost, bytes32[] nestedMessageHashes
+        bytes32 indexed messageHash, address indexed relayer, uint256 relayCost, bytes32[] nestedMessageHashes
     );
     event WithdrawalInitiated(address indexed from, uint256 amount);
     event WithdrawalFinalized(address indexed from, address indexed to, uint256 amount);
@@ -59,16 +59,11 @@ interface IGasTank {
         bytes calldata _sentMessage
     )
         external
-        returns (uint256 gasCost_, bytes32[] memory nestedMessageHashes_);
+        returns (uint256 relayCost_, bytes32[] memory nestedMessageHashes_);
     function claim(Identifier calldata _id, address _gasProvider, bytes calldata _payload) external;
     function decodeGasReceiptPayload(bytes calldata _payload)
         external
         pure
-        returns (
-            bytes32 originMessageHash_,
-            address relayer_,
-            uint256 relayCost_,
-            bytes32[] memory destinationMessageHashes_
-        );
+        returns (bytes32 messageHash_, address relayer_, uint256 relayCost_, bytes32[] memory nestedMessageHashes_);
     function claimOverhead(uint256 _numHashes, uint256 _baseFee) external pure returns (uint256);
 }
