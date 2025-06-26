@@ -35,10 +35,10 @@ contract GasTank is IGasTank {
     mapping(address gasProvider => Withdrawal) public withdrawals;
 
     /// @notice The authorized messages for claiming
-    mapping(address gasProvider => mapping(bytes32 msgHash => bool authorized)) public authorizedMessages;
+    mapping(address gasProvider => mapping(bytes32 messageHash => bool authorized)) public authorizedMessages;
 
     /// @notice The claimed messages
-    mapping(bytes32 rootMsgHash => bool claimed) public claimed;
+    mapping(bytes32 messageHash => bool claimed) public claimed;
 
     /// @notice Deposits funds into the gas tank, from which the relayer can claim the repayment after relaying
     /// @param _to The address to deposit the funds to
@@ -82,7 +82,10 @@ contract GasTank is IGasTank {
     function authorizeClaim(bytes32 _messageHash) external {
         authorizedMessages[msg.sender][_messageHash] = true;
 
-        emit AuthorizedClaim(msg.sender, _messageHash);
+        bytes32[] memory _messageHashes = new bytes32[](1);
+        _messageHashes[0] = _messageHash;
+
+        emit AuthorizedClaims(msg.sender, _messageHashes);
     }
 
     /// @notice Relays a message to the destination chain
@@ -93,7 +96,7 @@ contract GasTank is IGasTank {
         bytes calldata _sentMessage
     )
         external
-        returns (uint256 gasCost_, bytes32[] memory nestedMessageHashes_)
+        returns (uint256 relayCost_, bytes32[] memory nestedMessageHashes_)
     {
         uint256 initialGas = gasleft();
 
@@ -113,10 +116,10 @@ contract GasTank is IGasTank {
         }
 
         // Get the gas used
-        gasCost_ = _cost(initialGas - gasleft(), block.basefee) + _relayOverhead(nestedMessageHashes_.length);
+        relayCost_ = _cost(initialGas - gasleft(), block.basefee) + _relayOverhead(nestedMessageHashes_.length);
 
         // Emit the event with the relationship between the origin message and the destination messages
-        emit RelayedMessageGasReceipt(messageHash, msg.sender, gasCost_, nestedMessageHashes_);
+        emit RelayedMessageGasReceipt(messageHash, msg.sender, relayCost_, nestedMessageHashes_);
     }
 
     /// @notice Claims repayment for a relayed message
@@ -130,60 +133,57 @@ contract GasTank is IGasTank {
         // Validate the message
         ICrossL2Inbox(PredeployAddresses.CROSS_L2_INBOX).validateMessage(_id, keccak256(_payload));
 
-        (bytes32 originMessageHash, address relayer, uint256 relayCost, bytes32[] memory destinationMessageHashes) =
+        (bytes32 messageHash, address relayer, uint256 relayCost, bytes32[] memory nestedMessageHashes) =
             decodeGasReceiptPayload(_payload);
 
-        if (!authorizedMessages[_gasProvider][originMessageHash]) revert MessageNotAuthorized();
+        if (!authorizedMessages[_gasProvider][messageHash]) revert MessageNotAuthorized();
 
-        if (claimed[originMessageHash]) revert AlreadyClaimed();
+        if (claimed[messageHash]) revert AlreadyClaimed();
 
-        uint256 destinationMessageHashesLength = destinationMessageHashes.length;
+        uint256 nestedMessageHashesLength = nestedMessageHashes.length;
 
         // Authorize nested messages by the same gas provider
-        for (uint256 i; i < destinationMessageHashesLength; i++) {
-            authorizedMessages[_gasProvider][destinationMessageHashes[i]] = true;
+        for (uint256 i; i < nestedMessageHashesLength; i++) {
+            authorizedMessages[_gasProvider][nestedMessageHashes[i]] = true;
         }
+
+        if (nestedMessageHashesLength != 0) emit AuthorizedClaims(_gasProvider, nestedMessageHashes);
 
         if (balanceOf[_gasProvider] < relayCost) revert InsufficientBalance();
 
         balanceOf[_gasProvider] -= relayCost;
 
-        uint256 claimCost = _min(balanceOf[_gasProvider], claimOverhead(destinationMessageHashesLength, block.basefee));
+        uint256 claimCost = _min(balanceOf[_gasProvider], claimOverhead(nestedMessageHashesLength, block.basefee));
 
         balanceOf[_gasProvider] -= claimCost;
 
-        claimed[originMessageHash] = true;
+        claimed[messageHash] = true;
 
         new SafeSend{ value: relayCost }(payable(relayer));
 
         new SafeSend{ value: claimCost }(payable(msg.sender));
 
-        emit Claimed(originMessageHash, relayer, _gasProvider, msg.sender, relayCost, claimCost);
+        emit Claimed(messageHash, relayer, _gasProvider, msg.sender, relayCost, claimCost);
     }
 
     /// @notice Decodes the payload of the RelayedMessageGasReceipt event
     /// @param _payload The payload of the event
-    /// @return originMessageHash_ The hash of the relayed message
+    /// @return messageHash_ The hash of the relayed message
     /// @return relayer_ The address of the relayer
     /// @return relayCost_ The amount of native tokens expended on the relay
-    /// @return destinationMessageHashes_ The hashes of the destination messages
+    /// @return nestedMessageHashes_ The hashes of the destination messages
     function decodeGasReceiptPayload(bytes calldata _payload)
         public
         pure
-        returns (
-            bytes32 originMessageHash_,
-            address relayer_,
-            uint256 relayCost_,
-            bytes32[] memory destinationMessageHashes_
-        )
+        returns (bytes32 messageHash_, address relayer_, uint256 relayCost_, bytes32[] memory nestedMessageHashes_)
     {
         if (bytes32(_payload[:32]) != RelayedMessageGasReceipt.selector) revert InvalidPayload();
 
         // Decode Topics
-        (originMessageHash_, relayer_) = abi.decode(_payload[32:96], (bytes32, address));
+        (messageHash_, relayer_) = abi.decode(_payload[32:96], (bytes32, address));
 
         // Decode Data
-        (relayCost_, destinationMessageHashes_) = abi.decode(_payload[96:], (uint256, bytes32[]));
+        (relayCost_, nestedMessageHashes_) = abi.decode(_payload[96:], (uint256, bytes32[]));
     }
 
     /// @notice Calculates the overhead of a claim
@@ -191,17 +191,15 @@ contract GasTank is IGasTank {
     /// @param _baseFee The base fee of the block
     /// @return overhead_ The overhead cost of the claim transaction in wei
     function claimOverhead(uint256 _numHashes, uint256 _baseFee) public pure returns (uint256 overhead_) {
-        overhead_ = _cost(152_000 + _numHashes * 23_000, _baseFee);
+        overhead_ = _cost(151_800 + _numHashes * 23_000, _baseFee);
     }
 
     /// @notice Calculates the overhead to emit RelayedMessageGasReceipt
     /// @param _numHashes The number of destination hashes relayed
     /// @return overhead_ The gas cost to emit the event in wei
     function _relayOverhead(uint256 _numHashes) internal view returns (uint256 overhead_) {
-        // The memory expansion cost is quadratic.
-        // See: https://www.evm.codes/about#memoryexpansion
-        uint256 memoryExpansionGas = (420 * _numHashes) + (_numHashes * _numHashes) / 512;
-        overhead_ = _cost(35_000 + memoryExpansionGas, block.basefee);
+        uint256 memoryExpansionGas = (418 * _numHashes) + ((_numHashes * _numHashes) >> 9);
+        overhead_ = _cost(34_245 + memoryExpansionGas, block.basefee);
     }
 
     /// @notice Calculates the cost of gas used in wei
