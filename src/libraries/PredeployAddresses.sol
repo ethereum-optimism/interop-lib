@@ -8,6 +8,10 @@ library PredeployAddresses {
     /// @notice Address of the canonical WETH contract.
     address internal constant WETH = 0x4200000000000000000000000000000000000006;
 
+    /// @notice Address of the GasPriceOracle predeploy. Includes fee information
+    ///         and helpers for computing the L1 portion of the transaction fee.
+    address internal constant GAS_PRICE_ORACLE = 0x420000000000000000000000000000000000000F;
+
     /// @notice Address of the CrossL2Inbox predeploy.
     address internal constant CROSS_L2_INBOX = 0x4200000000000000000000000000000000000022;
 
