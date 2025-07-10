@@ -75,8 +75,5 @@ interface IGasTank {
             uint256 relayCost_,
             bytes32[] memory nestedMessageHashes_
         );
-    function claimOverhead(uint256 _numHashes, uint256 _baseFee, bytes calldata _data)
-        external
-        view
-        returns (uint256 overhead_);
+    function simulateClaimOverhead(uint256 _numHashes, uint256 _baseFee) external pure returns (uint256 overhead_);
 }
