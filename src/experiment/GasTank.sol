@@ -160,8 +160,10 @@ contract GasTank is IGasTank {
 
         if (balanceOf[gasProvider] < relayCost) revert InsufficientBalance();
 
-        uint256 claimCost =
-            _min(balanceOf[gasProvider], claimOverhead(nestedMessageHashesLength, block.basefee, msg.data));
+        uint256 claimCost = _min(
+            balanceOf[gasProvider],
+            _claimOverhead(nestedMessageHashesLength, block.basefee) + GAS_PRICE_ORACLE.getL1Fee(msg.data)
+        );
 
         balanceOf[gasProvider] -= relayCost + claimCost;
 
@@ -206,17 +208,20 @@ contract GasTank is IGasTank {
             abi.decode(_payload[96:], (address, uint256, uint256, bytes32[]));
     }
 
+    /// @notice Simulates the overhead of a claim transaction
+    /// @param _numHashes The number of destination hashes relayed
+    /// @param _baseFee The base fee of the block
+    /// @return overhead_ The overhead cost of the claim transaction in wei
+    function simulateClaimOverhead(uint256 _numHashes, uint256 _baseFee) external pure returns (uint256 overhead_) {
+        overhead_ = _claimOverhead(_numHashes, _baseFee);
+    }
+
     /// @notice Calculates the overhead of a claim
     /// @param _numHashes The number of destination hashes relayed
     /// @param _baseFee The base fee of the block
-    /// @param _data The data of the transaction
     /// @return overhead_ The overhead cost of the claim transaction in wei
     /// @dev Gas calculations based on config: optimizer=true, optimizer_runs=999999, evm_version="cancun"
-    function claimOverhead(uint256 _numHashes, uint256 _baseFee, bytes calldata _data)
-        public
-        view
-        returns (uint256 overhead_)
-    {
+    function _claimOverhead(uint256 _numHashes, uint256 _baseFee) internal pure returns (uint256 overhead_) {
         uint256 dynamicCost;
         uint256 fixedCost;
 
@@ -228,12 +233,12 @@ contract GasTank is IGasTank {
             fixedCost = 370_300;
         } else {
             fixedCost = 301_000;
-            dynamicCost = 34_800 * _numHashes;
-            dynamicCost += (_numHashes * _numHashes) >> 12;
+            dynamicCost = 34_822 * _numHashes;
+            dynamicCost += (_numHashes * _numHashes) >> 11;
         }
 
         // Calculate L2 and L1 costs separately
-        overhead_ = _cost(fixedCost + dynamicCost, _baseFee) + GAS_PRICE_ORACLE.getL1Fee(_data);
+        overhead_ = _cost(fixedCost + dynamicCost, _baseFee);
     }
 
     /// @notice Calculates the overhead to emit RelayedMessageGasReceipt
